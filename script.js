@@ -8,26 +8,48 @@ function atualizarDisplay(dataUTC) {
   relogio.textContent = `${horas}:${minutos}:${segundos}`;
 }
 
+async function buscarHoraInternet() {
+  try {
+    const resposta = await fetch("https://worldtimeapi.org/api/timezone/America/Sao_Paulo");
+    if (!resposta.ok) throw new Error("Resposta da API não OK");
+    const json = await resposta.json();
+    return new Date(json.utc_datetime);
+  } catch (erro) {
+    console.error("Erro ao buscar hora da internet:", erro);
+    return new Date(); // fallback para hora local do sistema
+  }
+}
+
 async function obterHora() {
   const cache = localStorage.getItem("horaInternet");
+  const agora = Date.now();
   let dataInicial;
 
   if (cache) {
     const dados = JSON.parse(cache);
-    dataInicial = new Date(dados.hora);
+    if (agora - dados.timestamp < 600000) {
+      dataInicial = new Date(dados.hora);
+    } else {
+      dataInicial = await buscarHoraInternet();
+      localStorage.setItem("horaInternet", JSON.stringify({ hora: dataInicial.toISOString(), timestamp: agora }));
+    }
   } else {
-    const resposta = await fetch("https://worldtimeapi.org/api/timezone/America/Sao_Paulo");
-    const json = await resposta.json();
-    dataInicial = new Date(json.utc_datetime);
-    localStorage.setItem("horaInternet", JSON.stringify({ hora: dataInicial.toISOString() }));
+    dataInicial = await buscarHoraInternet();
+    localStorage.setItem("horaInternet", JSON.stringify({ hora: dataInicial.toISOString(), timestamp: agora }));
   }
 
   let tempoAtual = new Date(dataInicial);
+  atualizarDisplay(tempoAtual);
 
   setInterval(() => {
     tempoAtual.setSeconds(tempoAtual.getSeconds() + 1);
     atualizarDisplay(tempoAtual);
   }, 1000);
+
+  setInterval(async () => {
+    tempoAtual = await buscarHoraInternet();
+    localStorage.setItem("horaInternet", JSON.stringify({ hora: tempoAtual.toISOString(), timestamp: Date.now() }));
+  }, 600000);
 }
 
 obterHora();
